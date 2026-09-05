@@ -1,0 +1,28 @@
+# Core
+numpy>=1.24
+pandas>=2.0
+scipy>=1.10
+scikit-learn>=1.3
+networkx>=3.1
+python-louvain>=0.16
+matplotlib>=3.7
+tqdm>=4.65
+
+# Deep learning
+torch>=2.1
+
+# torch-geometric and its optional accelerators (torch-scatter, torch-sparse,
+# pyg-lib) must be installed from the wheel index matching your exact torch
+# + CUDA build, e.g.:
+#   pip install torch-geometric
+#   pip install torch-scatter torch-sparse -f https://data.pyg.org/whl/torch-2.6.0+cu124.html
+#   pip install pyg-lib -f https://data.pyg.org/whl/torch-2.6.0+cu124.html
+# See README.md "Installation" for details -- these three are intentionally
+# NOT pinned here since the right wheel URL depends on your machine.
+torch-geometric>=2.4
+
+sentence-transformers>=2.2
+
+# Optional (only needed for certain analyses / flags)
+powerlaw>=1.5        # graph_stats.power_law_fit
+umap-learn>=0.5       # visualize plots (t-SNE/UMAP exploration), not used by run_pipeline.py

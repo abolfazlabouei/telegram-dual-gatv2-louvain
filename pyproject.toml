@@ -1,0 +1,9 @@
+[project]
+name = "telegram-dual-gatv2-louvain"
+version = "0.1.0"
+description = "Dual-stream GATv2 + Louvain community detection for Telegram groups"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+include = ["src*"]

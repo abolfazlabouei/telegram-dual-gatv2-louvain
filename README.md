@@ -35,6 +35,7 @@ src/
 scripts/
   prepare_data.py   # raw files -> data/telegram_graph.edgelist + data/graph_labels.csv
   run_pipeline.py   # end-to-end: data -> training -> clustering -> evaluation
+  run_baselines.py  # classical baselines (Louvain/Leiden/Infomap/Label Propagation) on the structural graph
   run_eval_only.py  # re-cluster/re-evaluate from a saved embedding file (no retraining)
 ```
 
@@ -206,6 +207,29 @@ python -m scripts.run_eval_only \
   --output-dir outputs/resweep_k12
 ```
 
+### Classical baselines (Louvain / Leiden / Infomap / Label Propagation)
+
+For the Chapter 5 "comparison with classical methods" table, run:
+
+```bash
+python -m scripts.run_baselines \
+  --edges data/telegram_graph.edgelist \
+  --labels data/graph_labels.csv \
+  --output-dir outputs
+```
+
+This only needs the structural graph -- no GATv2 training, no text
+embeddings -- so it finishes in seconds to minutes. It runs each
+algorithm in both a weighted and unweighted variant and writes
+`outputs/classical_baselines.csv` with one row per (algorithm, weighted)
+combination: `Modularity, NMI, ARI, Purity, num_communities, runtime_s`.
+
+Louvain and Label Propagation need nothing beyond `requirements.txt`.
+Leiden needs `pip install python-igraph leidenalg`; Infomap needs
+`pip install infomap`. Either missing dependency is skipped with a
+printed note (not a crash) -- rerun after installing to fill in the rest
+of the table.
+
 ## What this refactor does and does not fix
 
 This is a structural cleanup, not a methodology fix. Kept intentionally
@@ -218,11 +242,11 @@ as-is:
 - the fusion is a convex combination `alpha*h_struct + (1-alpha)*h_text`
   (`src/models.py::FusionGate`), not a concatenation-then-linear-layer —
   make sure any written description of the model matches this;
-- only two baselines are included (structural-only Louvain, and whatever
-  you compute yourself against `results_summary.csv`); Leiden / Infomap /
-  Label Propagation baselines referenced elsewhere are not implemented
-  here and would need to be added (e.g. via `networkx`, `igraph`, or
-  `leidenalg`) if you want to reproduce those comparisons from this code.
+- classical-baseline comparison (Louvain, Leiden, Infomap, Label
+  Propagation, weighted + unweighted) lives in `scripts/run_baselines.py`
+  / `src/baselines.py` -- separate from the proposed method's own
+  structural-only baseline in `results_summary.csv`, since it only needs
+  the structural graph and runs in seconds.
 
 ## Reproducibility notes
 

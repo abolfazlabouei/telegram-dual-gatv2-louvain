@@ -26,3 +26,10 @@ sentence-transformers>=2.2
 # Optional (only needed for certain analyses / flags)
 powerlaw>=1.5        # graph_stats.power_law_fit
 umap-learn>=0.5       # visualize plots (t-SNE/UMAP exploration), not used by run_pipeline.py
+
+# Optional -- classical-baseline comparison (scripts/run_baselines.py).
+# Louvain and Label Propagation need nothing extra; these two power the
+# other two algorithms in that table:
+python-igraph>=0.11   # + leidenalg for the Leiden baseline
+leidenalg>=0.10
+infomap>=2.7           # for the Infomap baseline

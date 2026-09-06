@@ -42,14 +42,15 @@ def load_dataset(edges_path: str, labels_path: str) -> Dataset:
     valid_ids = set(labels_df["peerid"].tolist())
     edges = edges[edges["src"].isin(valid_ids) & edges["dst"].isin(valid_ids)].copy()
 
-    nodes_df = labels_df[["peerid", "peer_name", "about", "label"]].drop_duplicates().copy()
+    nodes_df = labels_df[["peerid", "peer_name", "about", "label"]].drop_duplicates(
+        subset="peerid").reset_index(drop=True)
     id2idx = {pid: i for i, pid in enumerate(nodes_df["peerid"].tolist())}
     idx2id = {i: pid for pid, i in id2idx.items()}
     num_nodes = len(id2idx)
 
     return Dataset(
         edges=edges,
-        labels_df=labels_df,
+        labels_df=nodes_df,
         id2idx=id2idx,
         idx2id=idx2id,
         num_nodes=num_nodes,

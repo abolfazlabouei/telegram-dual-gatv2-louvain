@@ -50,31 +50,57 @@ def pyg_to_nx_weighted(data_cpu) -> nx.Graph:
     with zero edges (isolated) would silently be missing from the graph,
     undercounting `G.number_of_nodes()` relative to the true dataset size
     in any stats table built from it.
+
+    Symmetrized graphs (like the structural one) store both (u,v) and
+    (v,u) as separate directed entries in `edge_index`. Deduplicating
+    those with a per-edge Python loop (`G.has_edge()` + compare, once per
+    entry) is the actual bottleneck on large graphs -- tens of millions of
+    entries at a few microseconds of pure-Python dict work each adds up to
+    many minutes. Collapsing to unordered pairs via a vectorized pandas
+    `groupby(...).max()` first (implemented in C, not a Python loop) and
+    only then doing one bulk `add_weighted_edges_from` call is 10x+ faster
+    for graphs this size.
     """
     G = nx.Graph()
     G.add_nodes_from(range(data_cpu.num_nodes))
+
     src = data_cpu.edge_index[0].cpu().numpy()
     dst = data_cpu.edge_index[1].cpu().numpy()
     w = data_cpu.edge_attr.cpu().numpy().astype(float)
-    for u, v, ww in zip(src, dst, w):
-        u, v = int(u), int(v)
-        if G.has_edge(u, v):
-            if G[u][v]["weight"] < ww:
-                G[u][v]["weight"] = ww
-        else:
-            G.add_edge(u, v, weight=ww)
+    if len(src) == 0:
+        return G
+
+    a = np.minimum(src, dst)
+    b = np.maximum(src, dst)
+    df = pd.DataFrame({"a": a, "b": b, "weight": w})
+    df = df.groupby(["a", "b"], as_index=False)["weight"].max()
+
+    G.add_weighted_edges_from(
+        zip(df["a"].to_numpy(), df["b"].to_numpy(), df["weight"].to_numpy())
+    )
     return G
 
 
 def structural_only_baseline(
-    data_struct_cpu,
+    data_struct_cpu_or_graph,
     y_true: np.ndarray,
     resolution: float = 1.0,
     seed: int = 42,
 ) -> dict:
     """Louvain run directly on the structural (membership) graph, with no
-    learned embeddings involved at all -- a sanity-check baseline."""
-    G_struct = pyg_to_nx_weighted(data_struct_cpu)
+    learned embeddings involved at all -- a sanity-check baseline.
+
+    Accepts either a PyG `Data` object (builds the networkx graph itself)
+    OR an already-built `nx.Graph` (reused as-is). Pass the graph you
+    already built for the structural-graph report here instead of the
+    PyG `Data` -- building a second full copy of a multi-million-edge
+    graph while the first is still in memory is what was causing an OOM
+    kill at this step.
+    """
+    if isinstance(data_struct_cpu_or_graph, nx.Graph):
+        G_struct = data_struct_cpu_or_graph
+    else:
+        G_struct = pyg_to_nx_weighted(data_struct_cpu_or_graph)
     partition = best_partition(G_struct, weight="weight", resolution=resolution, random_state=seed)
     Q, NMI, ARI, PUR, K, pred = eval_partition(G_struct, partition, y_true)
     return {"Q": Q, "NMI": NMI, "ARI": ARI, "Purity": PUR, "num_communities": K,

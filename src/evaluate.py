@@ -47,8 +47,22 @@ def collect_metrics_row(name: str, G: nx.Graph, partition: dict, y_true: np.ndar
 
 def build_label_index(labels_df, column: str = "label") -> tuple[np.ndarray, dict]:
     """Map the raw reference-label column to contiguous integers, matching
-    the node ordering used everywhere else (i.e. `labels_df` row order)."""
-    y_raw = labels_df[column].astype(str).tolist()
+    the node ordering used everywhere else (i.e. `labels_df` row order).
+
+    Missing labels (empty cells) are pandas NaN -- a float, not a string --
+    even after `.astype(str)` (pandas leaves NaN as-is rather than turning
+    it into the text "nan"). Left alone, that mixes floats and strings in
+    the same column and `sorted()` crashes comparing them. Filled here
+    with an explicit "missing_label" category instead, with a count
+    printed so you know if this is happening on a meaningful number of
+    rows (worth mentioning in the thesis if so).
+    """
+    n_missing = int(labels_df[column].isna().sum())
+    if n_missing:
+        print(f"[evaluate] {n_missing:,} row(s) have a missing '{column}' value; "
+              f"grouping them into a single 'missing_label' category")
+
+    y_raw = labels_df[column].fillna("missing_label").astype(str).tolist()
     label2int = {l: i for i, l in enumerate(sorted(set(y_raw)))}
     y_true = np.array([label2int[l] for l in y_raw], dtype=int)
     return y_true, label2int

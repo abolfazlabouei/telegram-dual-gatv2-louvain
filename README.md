@@ -36,6 +36,7 @@ scripts/
   prepare_data.py   # raw files -> data/telegram_graph.edgelist + data/graph_labels.csv
   run_pipeline.py   # end-to-end: data -> training -> clustering -> evaluation
   run_baselines.py  # classical baselines (Louvain/Leiden/Infomap/Label Propagation) on the structural graph
+  run_ablation.py   # retrains from scratch: no_align / struct_only / content_only ablations
   run_eval_only.py  # re-cluster/re-evaluate from a saved embedding file (no retraining)
 ```
 
@@ -64,6 +65,16 @@ millions of membership rows), keeps only pairs with `weight >= 5`
 files down to the group ids common to both (a group with no metadata
 can't be text-embedded; a group with no edges is an isolated node the
 structural graph gets no signal from anyway).
+
+Before computing edges, it also drops outlier "hub" users who belong to
+an unusually large number of groups (bots, spam/aggregator accounts, or
+admin accounts subscribed to thousands of channels) -- a handful of such
+users can each single-handedly blow up the co-membership computation's
+memory use (one user in k groups contributes up to k² entries). The
+cutoff defaults to the 99.5th percentile of your data's own per-user
+group-count distribution (printed either way); override with
+`--max-groups-per-user N`, adjust with `--hub-percentile`, or disable
+entirely with `--no-hub-filter`.
 
 If your raw files use different column names than `user_id` / `group_id`
 / `peerid` / `about` / `label` / `peer_name`, point at the real ones:
@@ -229,6 +240,32 @@ Leiden needs `pip install python-igraph leidenalg`; Infomap needs
 `pip install infomap`. Either missing dependency is skipped with a
 printed note (not a crash) -- rerun after installing to fill in the rest
 of the table.
+
+### Ablation studies
+
+Three retrain-from-scratch ablations, using the exact same data and
+hyperparameters as the main run so they're directly comparable in a
+thesis table:
+
+```bash
+python -m scripts.run_ablation --mode all \
+  --edges data/telegram_graph.edgelist --labels data/graph_labels.csv \
+  --output-dir outputs/ablation
+```
+
+- `no_align` -- full dual-stream model, but with the alignment loss
+  (`lambda_a`) switched off, isolating whether it actually helps
+- `struct_only` -- a single GATv2 encoder trained only on the structural
+  graph, clustered directly on its output (no content graph at all)
+- `content_only` -- the same, but only on the content graph
+
+Run one mode at a time (`--mode no_align`, `--mode struct_only`, or
+`--mode content_only`) instead of `all` if you'd rather not run all
+three back to back -- each call appends to (and replaces same-named rows
+in) `outputs/ablation/ablation_results.csv`, so partial runs across
+multiple sessions still end up as one combined table. Its columns match
+`results_summary.csv` (`run_name, Q, #C, NMI, ARI, Purity, ...`), so the
+two files concatenate directly into one comparison table.
 
 ## What this refactor does and does not fix
 

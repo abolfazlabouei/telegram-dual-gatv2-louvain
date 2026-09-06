@@ -152,6 +152,15 @@ def main(cfg: Config) -> None:
     np.save(os.path.join(cfg.output_dir, "gate_alpha.npy"), alpha)
     save_alpha_report(alpha, ds.idx2id, fig_dir, data_dir, save_plots=cfg.save_plots)
 
+    # Free everything only needed up through embedding extraction. G_struct_nx
+    # is kept -- reused as-is for the structural-only baseline below, instead
+    # of rebuilding a second full copy of a multi-million-edge graph while
+    # the first is still resident (that duplication was causing an OOM kill
+    # at this step).
+    del data_struct_cpu, data_text_cpu, hs_all, ht_all, G_text_nx, loader_struct, loader_text
+    import gc
+    gc.collect()
+
     # -------------------------------------------------------- 6. clustering
     print("\n=== 6) Fused kNN graph + Louvain ===")
     G = build_fused_knn_graph(emb, cfg.k_fused, mutual=cfg.use_mutual_fused)
@@ -194,7 +203,7 @@ def main(cfg: Config) -> None:
 
     if cfg.run_struct_only_baseline:
         print("\n=== 8) Structural-only Louvain baseline ===")
-        base = structural_only_baseline(data_struct_cpu, y_true,
+        base = structural_only_baseline(G_struct_nx, y_true,
                                          resolution=cfg.louvain_resolution, seed=cfg.seed)
         print(f"[STRUCT-only Louvain] Q={base['Q']:.4f} NMI={base['NMI']:.4f} "
               f"ARI={base['ARI']:.4f} Purity={base['Purity']:.4f} "

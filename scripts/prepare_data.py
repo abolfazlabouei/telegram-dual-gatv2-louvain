@@ -35,6 +35,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.preprocessing import (
     load_membership_table,
     load_group_metadata,
+    filter_hub_users,
     compute_shared_membership_edges,
     restrict_to_common_nodes,
 )
@@ -65,6 +66,21 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--name-col", default="peer_name",
                     help="column in --groups holding a display name (optional; "
                          "falls back to the group id if not found)")
+
+    p.add_argument("--max-groups-per-user", type=int, default=None,
+                    help="drop users who belong to more than this many groups before "
+                         "computing shared-membership edges (default: auto, see "
+                         "--hub-percentile). A handful of outlier accounts (bots, "
+                         "spam, admin accounts) belonging to thousands of groups can "
+                         "each single-handedly blow up the co-membership matrix "
+                         "multiplication's memory use.")
+    p.add_argument("--hub-percentile", type=float, default=99.5,
+                    help="when --max-groups-per-user isn't given, use this percentile "
+                         "of the per-user group-count distribution as the cutoff "
+                         "(default: 99.5)")
+    p.add_argument("--no-hub-filter", dest="hub_filter", action="store_false", default=True,
+                    help="disable hub-user filtering entirely (only if you're sure your "
+                         "data has no extreme outlier accounts)")
     return p.parse_args()
 
 
@@ -81,10 +97,19 @@ def main() -> None:
         label_col=args.label_col, name_col=args.name_col,
     )
 
-    print("\n=== 2) Computing shared-membership edges ===")
+    if args.hub_filter:
+        print("\n=== 2) Filtering hub users ===")
+        memberships = filter_hub_users(
+            memberships, max_groups_per_user=args.max_groups_per_user,
+            hub_percentile=args.hub_percentile,
+        )
+    else:
+        print("\n=== 2) Filtering hub users (skipped, --no-hub-filter) ===")
+
+    print("\n=== 3) Computing shared-membership edges ===")
     edges = compute_shared_membership_edges(memberships, min_shared=args.min_shared)
 
-    print("\n=== 3) Restricting to nodes common to both files ===")
+    print("\n=== 4) Restricting to nodes common to both files ===")
     edges, labels_df = restrict_to_common_nodes(edges, labels_df)
 
     if len(edges) == 0:
